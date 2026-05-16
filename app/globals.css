@@ -1,0 +1,130 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* -----------------------------------------------------------------------------
+ * AIaaS.com theme tokens
+ * Ported from docs/handoff/prototype/theme.jsx
+ * Mirror of lib/theme.ts — tests/unit/theme.test.ts verifies they don't drift.
+ *
+ * Two orthogonal axes on the <html> element:
+ *   data-mode="light" | "dark"           (default: light)
+ *   data-accent="ember" | "kelp" | "cobalt" | "violet"   (default: ember)
+ * --------------------------------------------------------------------------- */
+
+@custom-variant dark (&:where([data-mode="dark"], [data-mode="dark"] *));
+
+:root,
+[data-mode="light"] {
+  --bg: #f6f5f0;
+  --bg-sub: #edebe3;
+  --panel: #ffffff;
+  --panel-soft: #faf9f4;
+  --text: #111114;
+  --text-dim: #575760;
+  --text-faint: #9a9aa2;
+  --line: #e5e2d8;
+  --line-soft: #efede4;
+  --success: #138a5a;
+  --warn: #b07a14;
+  --danger: #c03434;
+  --accent-text: #ffffff;
+}
+
+[data-mode="dark"] {
+  --bg: #0b0b0d;
+  --bg-sub: #121216;
+  --panel: #17171c;
+  --panel-soft: #1c1c22;
+  --text: #f2f2f0;
+  --text-dim: #9a9aa2;
+  --text-faint: #55555c;
+  --line: #26262c;
+  --line-soft: #1e1e24;
+  --success: #4ade80;
+  --warn: #f5b849;
+  --danger: #ef4444;
+  --accent-text: #ffffff;
+}
+
+:root,
+[data-accent="ember"] {
+  --accent: #e8532b;
+}
+[data-accent="kelp"] {
+  --accent: #1c8c5e;
+}
+[data-accent="cobalt"] {
+  --accent: #2e5ce5;
+}
+[data-accent="violet"] {
+  --accent: #7b3ff2;
+}
+
+/* shadcn/ui variable contract — driven by the AIaaS tokens above */
+:root {
+  --radius: 0.625rem;
+
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--panel);
+  --card-foreground: var(--text);
+  --popover: var(--panel);
+  --popover-foreground: var(--text);
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-text);
+  --secondary: var(--panel-soft);
+  --secondary-foreground: var(--text);
+  --muted: var(--bg-sub);
+  --muted-foreground: var(--text-dim);
+  --accent-bg: var(--panel-soft);
+  --accent-foreground: var(--text);
+  --destructive: var(--danger);
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--accent);
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent-bg);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-brand: var(--accent);
+  --color-brand-foreground: var(--accent-text);
+  --color-success: var(--success);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-panel: var(--panel);
+  --color-panel-soft: var(--panel-soft);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-text-dim: var(--text-dim);
+  --color-text-faint: var(--text-faint);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
