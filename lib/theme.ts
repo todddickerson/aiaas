@@ -8,6 +8,14 @@ export type AccentKey = (typeof ACCENT_KEYS)[number];
 export const MODE_KEYS = ["light", "dark"] as const;
 export type ModeKey = (typeof MODE_KEYS)[number];
 
+export const VARIANT_KEYS = [
+  "editorial",
+  "gamified",
+  "swiss",
+  "terminal",
+] as const;
+export type VariantKey = (typeof VARIANT_KEYS)[number];
+
 export const ACCENTS: Record<
   AccentKey,
   { name: string; hex: string; ok: string }
@@ -64,8 +72,22 @@ export const MODES: Record<ModeKey, ModeTokens> = {
   },
 };
 
+export interface VariantTokens {
+  name: string;
+  display: "serif" | "sans" | "mono";
+  body: "sans" | "mono";
+}
+
+export const VARIANTS: Record<VariantKey, VariantTokens> = {
+  editorial: { name: "Editorial", display: "serif", body: "sans" },
+  gamified: { name: "Arcade", display: "sans", body: "sans" },
+  swiss: { name: "Swiss", display: "sans", body: "sans" },
+  terminal: { name: "Terminal", display: "mono", body: "mono" },
+};
+
 export const DEFAULT_ACCENT: AccentKey = "ember";
 export const DEFAULT_MODE: ModeKey = "light";
+export const DEFAULT_VARIANT: VariantKey = "editorial";
 
 export function tokens(mode: ModeKey, accent: AccentKey) {
   return {
@@ -84,4 +106,9 @@ export function nextAccent(current: AccentKey): AccentKey {
 
 export function nextMode(current: ModeKey): ModeKey {
   return current === "light" ? "dark" : "light";
+}
+
+export function nextVariant(current: VariantKey): VariantKey {
+  const i = VARIANT_KEYS.indexOf(current);
+  return VARIANT_KEYS[(i + 1) % VARIANT_KEYS.length];
 }

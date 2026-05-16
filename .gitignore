@@ -48,3 +48,6 @@ next-env.d.ts
 
 # vitest
 /coverage/
+
+# pnpm content-addressable store (created when running inside Docker)
+/.pnpm-store/

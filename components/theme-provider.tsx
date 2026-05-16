@@ -12,11 +12,14 @@ import {
   ACCENT_KEYS,
   DEFAULT_ACCENT,
   DEFAULT_MODE,
+  DEFAULT_VARIANT,
   MODE_KEYS,
+  VARIANT_KEYS,
   nextAccent,
   nextMode,
   type AccentKey,
   type ModeKey,
+  type VariantKey,
 } from "@/lib/theme";
 
 const STORAGE_KEY = "aiaas:theme";
@@ -24,11 +27,13 @@ const STORAGE_KEY = "aiaas:theme";
 interface StoredTheme {
   mode: ModeKey;
   accent: AccentKey;
+  variant: VariantKey;
 }
 
 interface ThemeState extends StoredTheme {
   setMode: (m: ModeKey) => void;
   setAccent: (a: AccentKey) => void;
+  setVariant: (v: VariantKey) => void;
   cycle: () => void;
 }
 
@@ -37,6 +42,7 @@ const ThemeContext = createContext<ThemeState | null>(null);
 const DEFAULT_STATE: StoredTheme = {
   mode: DEFAULT_MODE,
   accent: DEFAULT_ACCENT,
+  variant: DEFAULT_VARIANT,
 };
 
 const listeners = new Set<() => void>();
@@ -54,6 +60,9 @@ function readStored(): StoredTheme {
       accent: ACCENT_KEYS.includes(parsed.accent as AccentKey)
         ? (parsed.accent as AccentKey)
         : DEFAULT_ACCENT,
+      variant: VARIANT_KEYS.includes(parsed.variant as VariantKey)
+        ? (parsed.variant as VariantKey)
+        : DEFAULT_VARIANT,
     };
   } catch {
     return DEFAULT_STATE;
@@ -64,7 +73,11 @@ let snapshot: StoredTheme = DEFAULT_STATE;
 
 function refreshSnapshot() {
   const next = readStored();
-  if (next.mode !== snapshot.mode || next.accent !== snapshot.accent) {
+  if (
+    next.mode !== snapshot.mode ||
+    next.accent !== snapshot.accent ||
+    next.variant !== snapshot.variant
+  ) {
     snapshot = next;
   }
 }
@@ -101,6 +114,7 @@ function persist(next: StoredTheme) {
   if (typeof document !== "undefined") {
     document.documentElement.dataset.mode = next.mode;
     document.documentElement.dataset.accent = next.accent;
+    document.documentElement.dataset.variant = next.variant;
     document.documentElement.style.colorScheme = next.mode;
   }
   if (typeof window !== "undefined") {
@@ -129,10 +143,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     (a: AccentKey) => persist({ ...snapshot, accent: a }),
     [],
   );
+  const setVariant = useCallback(
+    (v: VariantKey) => persist({ ...snapshot, variant: v }),
+    [],
+  );
   const cycle = useCallback(() => {
     const accent = nextAccent(snapshot.accent);
-    const mode = accent === DEFAULT_ACCENT ? nextMode(snapshot.mode) : snapshot.mode;
-    persist({ mode, accent });
+    const mode =
+      accent === DEFAULT_ACCENT ? nextMode(snapshot.mode) : snapshot.mode;
+    persist({ ...snapshot, mode, accent });
   }, []);
 
   return (
@@ -140,8 +159,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       value={{
         mode: state.mode,
         accent: state.accent,
+        variant: state.variant,
         setMode,
         setAccent,
+        setVariant,
         cycle,
       }}
     >

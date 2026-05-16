@@ -6,9 +6,10 @@
  * Ported from docs/handoff/prototype/theme.jsx
  * Mirror of lib/theme.ts — tests/unit/theme.test.ts verifies they don't drift.
  *
- * Two orthogonal axes on the <html> element:
- *   data-mode="light" | "dark"           (default: light)
- *   data-accent="ember" | "kelp" | "cobalt" | "violet"   (default: ember)
+ * Three orthogonal axes on the <html> element:
+ *   data-mode="light" | "dark"                                  (default: light)
+ *   data-accent="ember" | "kelp" | "cobalt" | "violet"          (default: ember)
+ *   data-variant="editorial" | "gamified" | "swiss" | "terminal" (default: editorial)
  * --------------------------------------------------------------------------- */
 
 @custom-variant dark (&:where([data-mode="dark"], [data-mode="dark"] *));
@@ -58,6 +59,33 @@
 }
 [data-accent="violet"] {
   --accent: #7b3ff2;
+}
+
+/* Variant fonts — wired to the next/font CSS variables defined in app/layout.tsx.
+ * Each variant swaps which font fills the display / body / mono slot. */
+:root,
+[data-variant="editorial"] {
+  --font-display: var(--font-instrument-serif), "Cormorant Garamond", Georgia, serif;
+  --font-body: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+[data-variant="gamified"] {
+  --font-display: var(--font-unbounded), var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+[data-variant="swiss"] {
+  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+[data-variant="terminal"] {
+  --font-display: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --font-body: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
 }
 
 /* shadcn/ui variable contract — driven by the AIaaS tokens above */
@@ -120,11 +148,61 @@
   --color-line-soft: var(--line-soft);
   --color-text-dim: var(--text-dim);
   --color-text-faint: var(--text-faint);
+
+  --font-sans: var(--font-body);
+  --font-serif: var(--font-display);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+}
+
+/* iOS auto-zoom guard: any text input on mobile must be ≥16px */
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+@keyframes aiaas-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  80% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes aiaas-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes aiaas-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+::selection {
+  background-color: color-mix(in oklab, var(--accent) 28%, transparent);
 }
