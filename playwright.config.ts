@@ -38,5 +38,10 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    env: {
+      // Keep the mock runtime snappy in CI so the runs spec doesn't wait
+      // 5 seconds per happy-path. Production still uses the 5s default.
+      MOCK_RUNTIME_DELAY_MS: process.env.MOCK_RUNTIME_DELAY_MS ?? "200",
+    },
   },
 });
