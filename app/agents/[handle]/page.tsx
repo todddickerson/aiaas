@@ -24,6 +24,7 @@ import { Footer } from "@/components/marketing/footer";
 import { TopNav } from "@/components/marketing/top-nav";
 import { fmt } from "@/lib/format";
 import { loadAgent, loadAgents } from "@/lib/seed/loader";
+import { getBizInfo } from "@/lib/whop/biz-info";
 import type { SampleDeliverable } from "@/lib/types";
 
 interface PageProps {
@@ -216,6 +217,7 @@ export default async function AgentDetailPage({ params }: PageProps) {
     agent.sampleDeliverables && agent.sampleDeliverables.length > 0
       ? agent.sampleDeliverables
       : defaultDeliverables();
+  const biz = await getBizInfo();
 
   // Synthesize a small run-history grid for the trust strip
   const runHistory = Array.from({ length: 12 }, (_, i) => {
@@ -476,7 +478,7 @@ export default async function AgentDetailPage({ params }: PageProps) {
           {/* Right column — hire panel (sticky on desktop) */}
           <div className="mt-10 md:mt-0">
             <div className="md:sticky md:top-24">
-              <AgentHireFlow agent={agent} />
+              <AgentHireFlow agent={agent} bizInfo={biz} />
             </div>
           </div>
         </div>
