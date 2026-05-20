@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Check,
@@ -16,10 +17,20 @@ import { Button } from "@/components/ui/button";
 import { price } from "@/lib/format";
 import type { Agent, AgentService } from "@/lib/types";
 
-type Step = "profile" | "brief" | "clarify" | "queue" | "done";
+type Step = "profile" | "brief" | "validating" | "clarify" | "rejected" | "queue" | "done";
 
 interface AgentHireFlowProps {
   agent: Agent;
+}
+
+interface ValidateResponse {
+  briefId: string | null;
+  verdict: "pass" | "clarify" | "rejected";
+  clarifyQuestions: string[];
+  rejectReason?: string;
+  model: string;
+  latencyMs: number;
+  stubbed: boolean;
 }
 
 const BRIEF_PLACEHOLDERS: Record<string, string> = {
@@ -39,39 +50,64 @@ const BRIEF_PLACEHOLDERS: Record<string, string> = {
     "e.g. SaaS at $1.4M ARR, 18 heads. Need a hire plan to hit $4M by EOY.",
 };
 
-const CLARIFY_QUESTIONS: Record<string, string[]> = {
-  funnelsmith: [
-    "What's the headline outcome the buyer gets in week 1?",
-    "Do you have an existing list to test the funnel against?",
-    "What price point are you anchoring the offer at?",
-  ],
-  adhook: [
-    "What platform should the ads run on (Meta, TikTok, both)?",
-    "Are you allowed to use customer testimonials?",
-    "What's the biggest objection you keep hearing on sales calls?",
-  ],
-  newsletterdraft: [
-    "Paste a recent newsletter we should match the voice of?",
-    "What's your CTA — reply, click, buy?",
-    "Is there a topic to avoid this week?",
-  ],
-};
-
 export function AgentHireFlow({ agent }: AgentHireFlowProps) {
   const [step, setStep] = useState<Step>("profile");
   const [picked, setPicked] = useState<AgentService>(agent.services[0]);
   const [brief, setBrief] = useState("");
+  const [clarifyQs, setClarifyQs] = useState<string[]>([]);
   const [clarifyAnswers, setClarifyAnswers] = useState<string[] | null>(null);
+  const [rejectReason, setRejectReason] = useState<string | null>(null);
+  const [validatorInfo, setValidatorInfo] = useState<{ model: string; latencyMs: number } | null>(null);
+  const [validatorError, setValidatorError] = useState<string | null>(null);
   const [queuePos] = useState(agent.queue + 1);
 
   const placeholder =
     BRIEF_PLACEHOLDERS[agent.id] ??
     `Describe what you need. ${agent.name} will ask clarifying questions if it needs them.`;
 
-  const clarifyQs = CLARIFY_QUESTIONS[agent.id];
-  const needsClarify = (clarifyQs?.length ?? 0) > 0;
+  const close = () => {
+    setStep("profile");
+    setRejectReason(null);
+    setValidatorError(null);
+    setClarifyAnswers(null);
+  };
 
-  const close = () => setStep("profile");
+  async function submitBrief() {
+    setStep("validating");
+    setValidatorError(null);
+    try {
+      const res = await fetch("/api/v1/briefs/validate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          agentSlug: agent.id,
+          briefText: brief,
+          serviceName: picked.name,
+          servicePriceCents: Math.round(picked.price * 100),
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(`Validator returned ${res.status}`);
+      }
+      const data = (await res.json()) as ValidateResponse;
+      setValidatorInfo({ model: data.model, latencyMs: data.latencyMs });
+      if (data.verdict === "pass") {
+        setStep("queue");
+        return;
+      }
+      if (data.verdict === "clarify") {
+        setClarifyQs(data.clarifyQuestions);
+        setClarifyAnswers(Array.from({ length: data.clarifyQuestions.length }, () => ""));
+        setStep("clarify");
+        return;
+      }
+      setRejectReason(data.rejectReason ?? "The validator couldn't accept this brief.");
+      setStep("rejected");
+    } catch (err) {
+      setValidatorError(err instanceof Error ? err.message : "Validator unreachable.");
+      setStep("brief");
+    }
+  }
 
   return (
     <>
@@ -92,8 +128,6 @@ export function AgentHireFlow({ agent }: AgentHireFlowProps) {
         </div>
       )}
 
-      {/* Services + hire panel — inline (not modal). Always rendered on the
-          right column; brief/clarify/queue/done open in a modal overlay. */}
       <aside
         className="flex flex-col gap-3"
         data-testid="agent-hire-panel"
@@ -200,7 +234,7 @@ export function AgentHireFlow({ agent }: AgentHireFlowProps) {
         </div>
       </aside>
 
-      {/* Modal — opens on Hire click for brief → clarify → queue → done */}
+      {/* Modal — opens on Hire click for brief → validate → clarify → queue → done */}
       {step !== "profile" && (
         <div
           data-testid="hire-modal"
@@ -242,6 +276,15 @@ export function AgentHireFlow({ agent }: AgentHireFlowProps) {
                   rows={6}
                   className="mt-4 w-full resize-y rounded-md border border-border bg-secondary p-3.5 text-[14px] leading-relaxed text-foreground outline-none focus:border-[color:var(--accent)]"
                 />
+                {validatorError && (
+                  <div
+                    data-testid="validator-error"
+                    className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-[13px] text-destructive"
+                  >
+                    <AlertTriangle className="mr-1 inline size-3.5" aria-hidden />
+                    {validatorError}
+                  </div>
+                )}
                 <div className="mt-4 flex items-center justify-between">
                   <button
                     type="button"
@@ -255,8 +298,9 @@ export function AgentHireFlow({ agent }: AgentHireFlowProps) {
                     type="button"
                     size="lg"
                     disabled={brief.trim().length < 8}
-                    onClick={() => setStep(needsClarify ? "clarify" : "queue")}
+                    onClick={submitBrief}
                     style={{ background: "var(--accent)" }}
+                    data-testid="brief-submit"
                   >
                     Pay {price(picked.price)} &amp; queue
                     <ArrowRight className="ml-1 size-4" aria-hidden />
@@ -265,8 +309,27 @@ export function AgentHireFlow({ agent }: AgentHireFlowProps) {
               </div>
             )}
 
+            {step === "validating" && (
+              <div className="p-9 text-center md:p-12" data-testid="validator-running">
+                <div className="inline-flex items-center gap-2 text-muted-foreground">
+                  <Loader2
+                    className="size-5 animate-spin"
+                    style={{ color: "var(--accent)" }}
+                    aria-hidden
+                  />
+                  <span>Compiling your brief…</span>
+                </div>
+                <p
+                  className="mt-3 text-xs text-muted-foreground"
+                  style={{ fontFamily: "var(--font-mono)" }}
+                >
+                  Validator checks completeness before any money holds.
+                </p>
+              </div>
+            )}
+
             {step === "clarify" && (
-              <div className="p-7 md:p-9">
+              <div className="p-7 md:p-9" data-testid="validator-clarify">
                 <div
                   className="mb-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-[1.2px] text-muted-foreground"
                   style={{ fontFamily: "var(--font-mono)" }}
@@ -284,17 +347,25 @@ export function AgentHireFlow({ agent }: AgentHireFlowProps) {
                   Answer in 30 seconds. Sharper brief → fewer revisions.
                 </p>
                 <div className="mt-4 flex flex-col gap-3">
-                  {(clarifyQs ?? []).map((q, i) => (
+                  {clarifyQs.map((q, i) => (
                     <ClarifyRow
                       key={i}
                       index={i}
                       question={q}
                       onChange={(answers) => setClarifyAnswers(answers)}
                       existing={clarifyAnswers}
-                      total={clarifyQs!.length}
+                      total={clarifyQs.length}
                     />
                   ))}
                 </div>
+                {validatorInfo && (
+                  <p
+                    className="mt-3 text-[10.5px] text-text-faint"
+                    style={{ fontFamily: "var(--font-mono)" }}
+                  >
+                    validator · {validatorInfo.model} · {validatorInfo.latencyMs}ms
+                  </p>
+                )}
                 <div className="mt-5 flex items-center justify-between">
                   <button
                     type="button"
@@ -309,16 +380,46 @@ export function AgentHireFlow({ agent }: AgentHireFlowProps) {
                     size="lg"
                     disabled={
                       !clarifyAnswers ||
-                      clarifyAnswers.length < (clarifyQs?.length ?? 0) ||
+                      clarifyAnswers.length < clarifyQs.length ||
                       clarifyAnswers.some((a) => a.trim().length < 2)
                     }
                     onClick={() => setStep("queue")}
                     style={{ background: "var(--accent)" }}
+                    data-testid="clarify-submit"
                   >
                     Thanks — queue me up
                     <ArrowRight className="ml-1 size-4" aria-hidden />
                   </Button>
                 </div>
+              </div>
+            )}
+
+            {step === "rejected" && (
+              <div className="p-9 text-center md:p-12" data-testid="validator-rejected">
+                <div
+                  className="mx-auto inline-flex size-14 items-center justify-center rounded-full"
+                  style={{ background: "var(--danger)", color: "white" }}
+                >
+                  <AlertTriangle className="size-7" aria-hidden />
+                </div>
+                <h3
+                  className="mt-5 text-2xl font-semibold tracking-tight"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  Brief rejected
+                </h3>
+                <p className="mx-auto mt-2 max-w-[420px] text-sm text-muted-foreground">
+                  {rejectReason}
+                </p>
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="secondary"
+                  onClick={() => setStep("brief")}
+                  className="mt-6"
+                >
+                  Edit brief
+                </Button>
               </div>
             )}
 
@@ -354,6 +455,15 @@ export function AgentHireFlow({ agent }: AgentHireFlowProps) {
                   >
                     Live trace opens when your run starts · receipt emailed on delivery
                   </p>
+                  {validatorInfo && (
+                    <p
+                      className="mt-1 text-[10.5px] text-text-faint"
+                      style={{ fontFamily: "var(--font-mono)" }}
+                      data-testid="validator-summary"
+                    >
+                      validator · pass · {validatorInfo.model} · {validatorInfo.latencyMs}ms
+                    </p>
+                  )}
                   <Button
                     type="button"
                     size="lg"
