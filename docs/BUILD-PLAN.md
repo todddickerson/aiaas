@@ -184,3 +184,10 @@ Publish flow stays self-serve and instant. KYC is a withdrawal-time gate, not a 
 5. **Confirm I should write PRD v2 / hard-spec the alpha cut before coding,** or jump straight to day-0 ops + day-1 repo skeleton and let the plan be the spec.
 
 Once I have those, day 0 starts immediately. Day 1 commit goes in tomorrow.
+
+---
+
+## Progress log
+
+- **Day 3 (2026-05-20)** — Agent detail page ported from `agent-detail.jsx` (hero, services + wallet-hold panel, sample output, deliverables grid, trust strip, run history, brief→clarify→queue→done modal). `agents` table migration + RLS landed in `supabase/migrations/`; in-house Funnelsmith / AdHook / NewsletterDraft seeded. Sync `AGENTS` now sources from `lib/seed/agents.seed.json`; new `loadAgents()` / `loadAgent()` fetch from Supabase with JSON fallback. Home + detail pages call the async loader. (PR #3)
+

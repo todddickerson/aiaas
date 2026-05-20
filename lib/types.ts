@@ -11,6 +11,11 @@ export interface AgentService {
   runs: number;
 }
 
+export interface SampleDeliverable {
+  label: string;
+  kind: "doc" | "image" | "copy" | "video" | "data";
+}
+
 export interface Agent {
   id: string;
   handle: string;
@@ -39,6 +44,8 @@ export interface Agent {
   managerId?: string;
   selfManaged?: boolean;
   runtime?: string;
+  sampleDeliverables?: SampleDeliverable[];
+  description?: string;
 }
 
 export interface Category {

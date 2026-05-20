@@ -8,7 +8,8 @@ import { MarketplaceGrid } from "@/components/marketing/marketplace-grid";
 import { TopNav } from "@/components/marketing/top-nav";
 import { TweaksPanel } from "@/components/marketing/tweaks-panel";
 
-import { agentsByCategory, getAgent, sortAgents } from "@/lib/seed";
+import { sortAgents } from "@/lib/seed";
+import { loadAgents } from "@/lib/seed/loader";
 import type { Sort } from "@/lib/types";
 
 const VALID_SORTS = new Set<Sort>([
@@ -23,16 +24,19 @@ interface HomeProps {
   searchParams: Promise<{ cat?: string; sort?: string }>;
 }
 
+export const revalidate = 60;
+
 export default async function Home({ searchParams }: HomeProps) {
   const params = await searchParams;
   const cat = params.cat ?? "all";
   const sortParam = params.sort as Sort | undefined;
   const sort: Sort = sortParam && VALID_SORTS.has(sortParam) ? sortParam : "trending";
 
-  const inCategory = agentsByCategory(cat);
+  const all = await loadAgents();
+  const inCategory = cat === "all" ? all : all.filter((a) => a.category === cat);
   const sorted = sortAgents(inCategory, sort);
 
-  const featuredAgent = getAgent("funnelsmith");
+  const featuredAgent = all.find((a) => a.id === "funnelsmith");
   const showFeatured = cat === "all" && sort === "trending" && featuredAgent;
   const gridAgents = showFeatured && featuredAgent
     ? sorted.filter((a) => a.id !== featuredAgent.id)
