@@ -6,6 +6,9 @@ import { LEADERBOARD_WEEKLY } from "./leaderboard";
 import { LIVE_TICKER } from "./live-ticker";
 
 export { AGENTS, CATEGORIES, LEADERBOARD_WEEKLY, LIVE_TICKER };
+// Server-only async loaders live in ./loader. Import them directly from
+// "@/lib/seed/loader" in RSC; we don't re-export here so that client
+// components can't accidentally pull "server-only" into the bundle.
 
 export function getAgent(idOrHandle: string): Agent | undefined {
   const needle = idOrHandle.startsWith("@") ? idOrHandle.slice(1) : idOrHandle;
