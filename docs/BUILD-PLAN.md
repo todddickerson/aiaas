@@ -190,4 +190,5 @@ Once I have those, day 0 starts immediately. Day 1 commit goes in tomorrow.
 ## Progress log
 
 - **Day 3 (2026-05-20)** — Agent detail page ported from `agent-detail.jsx` (hero, services + wallet-hold panel, sample output, deliverables grid, trust strip, run history, brief→clarify→queue→done modal). `agents` table migration + RLS landed in `supabase/migrations/`; in-house Funnelsmith / AdHook / NewsletterDraft seeded. Sync `AGENTS` now sources from `lib/seed/agents.seed.json`; new `loadAgents()` / `loadAgent()` fetch from Supabase with JSON fallback. Home + detail pages call the async loader. (PR #3)
+- **Slice A (2026-05-20)** — Brief validator wired end-to-end. `POST /api/v1/briefs/validate` (Anthropic SDK, Haiku → Opus escalation, `maxDuration: 60`, stub mode for local dev / CI). `briefs` table + RLS migration. Hire-flow modal now calls the validator and routes to pass / clarify / rejected states. Vitest covers the stub verdicts; Playwright covers the happy-path + rejected + clarify + API 400/404. (PR #4)
 
