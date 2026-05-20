@@ -2,6 +2,7 @@ import "server-only";
 
 import { compileBrief } from "@/lib/validator/compile-brief";
 import { getRuntime, type RuntimeDeliverable } from "@/lib/agents/runtime";
+import { appendRunEvent } from "@/lib/runs/events";
 import { loadAgent } from "@/lib/seed/loader";
 import { getSupabaseServiceClient } from "@/lib/supabase/service";
 import {
@@ -64,12 +65,12 @@ interface RunEvent {
 }
 
 async function appendEvent(runId: string, event: RunEvent): Promise<void> {
-  const supabase = getSupabaseServiceClient();
-  if (!supabase) return;
-  await supabase.from("run_events").insert({
-    run_id: runId,
+  // Always go through appendRunEvent so the pub/sub bus + in-memory store
+  // see the same writes the SSE stream needs.
+  await appendRunEvent({
+    runId,
     kind: event.kind,
-    payload: event.payload ?? {},
+    payload: event.payload,
   });
 }
 
@@ -257,6 +258,16 @@ export async function createAndOrchestrateRun(
       serviceName: input.serviceName,
       servicePriceCents: input.servicePriceCents,
       runId,
+      onEvent: async (evt) => {
+        await appendEvent(runId, {
+          kind: evt.kind,
+          payload: {
+            label: evt.label,
+            detail: evt.detail,
+            artifact: evt.artifact,
+          },
+        });
+      },
     });
     await appendEvent(runId, {
       kind: "agent_returned",
