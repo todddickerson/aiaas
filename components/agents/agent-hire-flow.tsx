@@ -1,23 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Check,
-  ChevronRight,
   HelpCircle,
   Loader2,
   Lock,
   X,
 } from "lucide-react";
 
+import { LiveTrace } from "@/components/runs/live-trace";
 import { Button } from "@/components/ui/button";
 import { price } from "@/lib/format";
 import type { Agent, AgentService } from "@/lib/types";
 
-type Step = "profile" | "brief" | "validating" | "clarify" | "rejected" | "queue" | "done";
+type Step =
+  | "profile"
+  | "brief"
+  | "validating"
+  | "clarify"
+  | "rejected"
+  | "queue"
+  | "running"
+  | "done";
+
+const WALLET_USER_KEY = "aiaas:wallet:user-id";
+const ANON_PREFIX = "anon-";
+
+function readOrCreateAnonId(): string {
+  if (typeof window === "undefined") return "";
+  const existing = window.localStorage.getItem(WALLET_USER_KEY);
+  if (existing) return existing;
+  const id =
+    ANON_PREFIX +
+    (typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : Math.random().toString(16).slice(2, 14));
+  window.localStorage.setItem(WALLET_USER_KEY, id);
+  return id;
+}
 
 interface AgentHireFlowProps {
   agent: Agent;
@@ -60,6 +84,8 @@ export function AgentHireFlow({ agent }: AgentHireFlowProps) {
   const [validatorInfo, setValidatorInfo] = useState<{ model: string; latencyMs: number } | null>(null);
   const [validatorError, setValidatorError] = useState<string | null>(null);
   const [queuePos] = useState(agent.queue + 1);
+  const [runId, setRunId] = useState<string | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
 
   const placeholder =
     BRIEF_PLACEHOLDERS[agent.id] ??
@@ -70,7 +96,84 @@ export function AgentHireFlow({ agent }: AgentHireFlowProps) {
     setRejectReason(null);
     setValidatorError(null);
     setClarifyAnswers(null);
+    setRunId(null);
+    setRunError(null);
   };
+
+  async function startRun() {
+    setRunError(null);
+    setStep("running");
+    try {
+      const userId = readOrCreateAnonId();
+      const amountCents = Math.round(picked.price * 100);
+
+      // Best-effort top-up so the wallet has enough to cover the hold. The
+      // stub Whop client makes this instant and idempotent.
+      await fetch("/api/v1/wallet/top-up", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          amountCents,
+          idempotencyKey: `auto-topup:${userId}:${agent.id}:${picked.name}`,
+        }),
+      }).catch(() => {
+        // Non-fatal — the run will fail with insufficient balance if needed.
+      });
+
+      const res = await fetch("/api/v1/runs/create", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          agentSlug: agent.id,
+          briefText: brief,
+          serviceName: picked.name,
+          servicePriceCents: amountCents,
+          idempotencyKey: `run:${userId}:${agent.id}:${Date.now()}`,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(`Run create returned ${res.status}`);
+      }
+      const data = (await res.json()) as { id: string; status: string; error?: string };
+      setRunId(data.id);
+      if (data.status === "failed" && data.error) {
+        setRunError(data.error);
+      }
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : "Could not start the run.");
+    }
+  }
+
+  // When the run reaches "delivered" we flip to the done step. We poll the
+  // run record (the LiveTrace stream pushes its own "done" SSE — but flipping
+  // the modal needs an external trigger).
+  useEffect(() => {
+    if (step !== "running" || !runId) return;
+    let cancelled = false;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/v1/runs/${runId}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { status: string; error?: string };
+        if (cancelled) return;
+        if (data.status === "delivered" || data.status === "accepted") {
+          setStep("done");
+          clearInterval(interval);
+        } else if (data.status === "failed") {
+          setRunError(data.error ?? "Run failed.");
+          clearInterval(interval);
+        }
+      } catch {
+        // ignore transient errors
+      }
+    }, 1_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [step, runId]);
 
   async function submitBrief() {
     setStep("validating");
@@ -92,7 +195,7 @@ export function AgentHireFlow({ agent }: AgentHireFlowProps) {
       const data = (await res.json()) as ValidateResponse;
       setValidatorInfo({ model: data.model, latencyMs: data.latencyMs });
       if (data.verdict === "pass") {
-        setStep("queue");
+        await startRun();
         return;
       }
       if (data.verdict === "clarify") {
@@ -383,7 +486,9 @@ export function AgentHireFlow({ agent }: AgentHireFlowProps) {
                       clarifyAnswers.length < clarifyQs.length ||
                       clarifyAnswers.some((a) => a.trim().length < 2)
                     }
-                    onClick={() => setStep("queue")}
+                    onClick={() => {
+                      void startRun();
+                    }}
                     style={{ background: "var(--accent)" }}
                     data-testid="clarify-submit"
                   >
@@ -443,38 +548,40 @@ export function AgentHireFlow({ agent }: AgentHireFlowProps) {
                     />
                     <span>Queueing your run…</span>
                   </div>
-                  <div
-                    className="mt-6 text-5xl font-bold"
-                    style={{ fontFamily: "var(--font-display)" }}
-                  >
-                    #{queuePos}
-                  </div>
-                  <p
-                    className="mt-2 text-xs text-muted-foreground"
-                    style={{ fontFamily: "var(--font-mono)" }}
-                  >
-                    Live trace opens when your run starts · receipt emailed on delivery
-                  </p>
-                  {validatorInfo && (
-                    <p
-                      className="mt-1 text-[10.5px] text-text-faint"
-                      style={{ fontFamily: "var(--font-mono)" }}
-                      data-testid="validator-summary"
-                    >
-                      validator · pass · {validatorInfo.model} · {validatorInfo.latencyMs}ms
-                    </p>
-                  )}
-                  <Button
-                    type="button"
-                    size="lg"
-                    onClick={() => setStep("done")}
-                    className="mt-6"
-                    style={{ background: "var(--accent)" }}
-                  >
-                    Continue to delivery
-                    <ChevronRight className="ml-1 size-4" aria-hidden />
-                  </Button>
                 </div>
+              </div>
+            )}
+
+            {step === "running" && (
+              <div className="p-6 md:p-8" data-testid="run-running">
+                <div
+                  className="mb-3 flex items-center justify-between text-[10px] uppercase tracking-[1.2px] text-muted-foreground"
+                  style={{ fontFamily: "var(--font-mono)" }}
+                >
+                  <span>Step 2 of 2 · Live trace</span>
+                  {validatorInfo && (
+                    <span data-testid="validator-summary">
+                      validator · pass · {validatorInfo.model} · {validatorInfo.latencyMs}ms
+                    </span>
+                  )}
+                </div>
+                {runError && (
+                  <div
+                    data-testid="run-error"
+                    className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-[13px] text-destructive"
+                  >
+                    <AlertTriangle className="mr-1 inline size-3.5" aria-hidden />
+                    {runError}
+                  </div>
+                )}
+                {runId ? (
+                  <LiveTrace runId={runId} agentHandle={agent.handle} />
+                ) : (
+                  <div className="py-6 text-center text-muted-foreground">
+                    <Loader2 className="mx-auto mb-2 size-5 animate-spin" aria-hidden />
+                    <p className="text-sm">Starting your run…</p>
+                  </div>
+                )}
               </div>
             )}
 
