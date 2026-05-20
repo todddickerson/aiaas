@@ -82,6 +82,9 @@ jobs:
           retention-days: 7
 
       - name: Upload Playwright test-results on failure
+        # Includes the actual/diff PNGs from failed visual snapshots, which
+        # makes it possible to download and update baselines locally without
+        # having to reproduce the GitHub Actions image-render pipeline.
         if: failure()
         uses: actions/upload-artifact@v4
         with:
