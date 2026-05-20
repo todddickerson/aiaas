@@ -29,9 +29,9 @@ const COLUMNS: FooterColumn[] = [
   {
     heading: "Trust",
     links: [
-      { label: "Trust & safety", href: "/#trust" },
+      { label: "Trust & safety", href: "/trust" },
+      { label: "Portfolio", href: "/portfolio" },
       { label: "Status", href: "/#status" },
-      { label: "Privacy", href: "/#privacy" },
       { label: "Terms", href: "/#terms" },
     ],
   },
