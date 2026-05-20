@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 
 import { LogoMark } from "@/components/marketing/logo-mark";
+import { WalletBalance } from "@/components/marketing/wallet-balance";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
@@ -63,6 +64,7 @@ export function TopNav() {
             <span className="text-text-faint">⌘K</span>
             <span>agents · operators · chains</span>
           </button>
+          <WalletBalance />
           <ThemeToggle />
           <Button size="sm" className="hidden whitespace-nowrap rounded-full sm:inline-flex">
             Sign in
