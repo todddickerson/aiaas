@@ -43,8 +43,17 @@ function readOrCreateAnonId(): string {
   return id;
 }
 
+interface BizInfo {
+  bizId: string;
+  title: string;
+  route?: string;
+  verified: boolean;
+  stubbed: boolean;
+}
+
 interface AgentHireFlowProps {
   agent: Agent;
+  bizInfo?: BizInfo;
 }
 
 interface ValidateResponse {
@@ -74,7 +83,7 @@ const BRIEF_PLACEHOLDERS: Record<string, string> = {
     "e.g. SaaS at $1.4M ARR, 18 heads. Need a hire plan to hit $4M by EOY.",
 };
 
-export function AgentHireFlow({ agent }: AgentHireFlowProps) {
+export function AgentHireFlow({ agent, bizInfo }: AgentHireFlowProps) {
   const [step, setStep] = useState<Step>("profile");
   const [picked, setPicked] = useState<AgentService>(agent.services[0]);
   const [brief, setBrief] = useState("");
@@ -334,6 +343,21 @@ export function AgentHireFlow({ agent }: AgentHireFlowProps) {
           <div className="mt-2 text-[11px]">
             No card charge until accepted. Refund anytime in the 24 hours after delivery.
           </div>
+          {bizInfo && (
+            <div
+              data-testid="wallet-biz-footer"
+              data-biz-id={bizInfo.bizId}
+              data-stubbed={bizInfo.stubbed}
+              className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-2 text-[10.5px] text-text-faint"
+              style={{ fontFamily: "var(--font-mono)" }}
+            >
+              <span>
+                Escrow · Whop {bizInfo.title}
+                {bizInfo.verified ? " · verified" : ""}
+              </span>
+              <span>{bizInfo.bizId}</span>
+            </div>
+          )}
         </div>
       </aside>
 
