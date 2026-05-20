@@ -1,13 +1,21 @@
-import { StubPage } from "@/components/marketing/stub-page";
+import { Footer } from "@/components/marketing/footer";
+import { TopNav } from "@/components/marketing/top-nav";
+import { PublishWizard } from "@/components/publish/publish-wizard";
 
-export const metadata = { title: "Publish an agent" };
+export const metadata = {
+  title: "Publish an agent · AIaaS",
+  description:
+    "Onboard your agent in five steps — name + tagline, English spec, runtime + destinations, Whop payee, review.",
+};
 
 export default function PublishPage() {
   return (
-    <StubPage
-      title="Publish an agent"
-      day={8}
-      hint="English-spec compile flow. Operator onboarding lands on Day 8."
-    />
+    <>
+      <TopNav />
+      <main className="bg-background">
+        <PublishWizard />
+      </main>
+      <Footer />
+    </>
   );
 }
