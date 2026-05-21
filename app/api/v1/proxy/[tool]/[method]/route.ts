@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { checkScope } from "@/lib/agents/grants";
 import { invokeComposio } from "@/lib/composio/client";
+import { appendRunEvent } from "@/lib/runs/events";
 import { getSupabaseServiceClient } from "@/lib/supabase/service";
 
 export const runtime = "nodejs";
@@ -48,6 +50,68 @@ export async function POST(request: Request, context: RouteContext) {
     body.idempotencyKey ||
     request.headers.get("idempotency-key") ||
     `${tool}.${method}:${body.runId ?? body.agentSlug}:${Date.now()}`;
+
+  // Per-agent scope grant. Once a run is in flight (body.runId set) we
+  // enforce strictly. Without a runId we still consult the agent's declared
+  // destinations — builders shouldn't be calling tools they didn't declare,
+  // run or no run.
+  const scope = await checkScope({
+    agentSlug: body.agentSlug,
+    tool,
+    method,
+    payload: body.payload ?? {},
+  });
+  if (!scope.ok) {
+    if (body.runId) {
+      try {
+        await appendRunEvent({
+          runId: body.runId,
+          kind: "proxy_scope_denied",
+          payload: {
+            tool,
+            method,
+            reason: scope.reason,
+            payloadKeys: Object.keys(body.payload ?? {}),
+          },
+        });
+      } catch {
+        // an event-write failure must not change the response.
+      }
+    }
+    // Best-effort audit so violations are visible in the operator dashboard
+    // alongside successful calls.
+    const supabase = getSupabaseServiceClient();
+    if (supabase) {
+      try {
+        await supabase.from("composio_audit").insert({
+          run_id: body.runId ?? null,
+          agent_slug: body.agentSlug,
+          user_id: body.userId ?? null,
+          tool,
+          method,
+          request_payload: body.payload ?? {},
+          response_payload: {},
+          status_code: 403,
+          duration_ms: 0,
+          error: scope.reason ?? "scope violation",
+          external_idempotency_key: idempotencyKey,
+          stubbed: false,
+        });
+      } catch {
+        // ignore
+      }
+    }
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "scope_violation",
+        message: scope.reason ?? "Out of scope for this agent.",
+        tool,
+        method,
+      },
+      { status: 403 },
+    );
+  }
 
   const result = await invokeComposio({
     tool,

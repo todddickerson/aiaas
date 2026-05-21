@@ -2,7 +2,13 @@ import "server-only";
 
 import { AGENTS } from "./agents";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import type { Agent, AgentService, SampleDeliverable, Tier } from "@/lib/types";
+import type {
+  Agent,
+  AgentDestination,
+  AgentService,
+  SampleDeliverable,
+  Tier,
+} from "@/lib/types";
 
 interface DbAgentRow {
   id: string;
@@ -37,6 +43,7 @@ interface DbAgentRow {
   sample_deliverables: SampleDeliverable[] | null;
   description: string | null;
   image_url: string | null;
+  destinations: AgentDestination[] | null;
 }
 
 function fromCents(cents: number): number {
@@ -75,6 +82,7 @@ function rowToAgent(row: DbAgentRow): Agent {
     runtime: row.runtime ?? undefined,
     sampleDeliverables: row.sample_deliverables ?? undefined,
     description: row.description ?? undefined,
+    destinations: row.destinations ?? undefined,
   };
 }
 

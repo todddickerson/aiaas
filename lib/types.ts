@@ -16,6 +16,19 @@ export interface SampleDeliverable {
   kind: "doc" | "image" | "copy" | "video" | "data";
 }
 
+export interface AgentDestination {
+  tool: string;
+  method: string;
+  label?: string;
+  /**
+   * The per-call payload contract. Each tool maps these keys to a payload
+   * the Composio adapter understands (Slack: `channel`, Email: `to`,
+   * Notion: `parent`, etc). Anything in here is what the runtime's delivery
+   * dispatcher is allowed to set; the proxy refuses anything outside.
+   */
+  target: Record<string, string>;
+}
+
 export interface Agent {
   id: string;
   handle: string;
@@ -46,6 +59,7 @@ export interface Agent {
   runtime?: string;
   sampleDeliverables?: SampleDeliverable[];
   description?: string;
+  destinations?: AgentDestination[];
 }
 
 export interface Category {

@@ -91,4 +91,50 @@ test.describe("runs orchestration", () => {
     const resp = await request.get("/api/v1/runs/run_does_not_exist");
     expect(resp.status()).toBe(404);
   });
+
+  test("delivered run dispatches to declared destinations (Composio stub)", async ({
+    request,
+  }) => {
+    const userId = `e2e-deliver-${Date.now()}`;
+    await request.post("/api/v1/wallet/top-up", {
+      data: {
+        userId,
+        amountCents: 20000,
+        idempotencyKey: `topup-${userId}`,
+      },
+    });
+    const create = await request.post("/api/v1/runs/create", {
+      data: {
+        userId,
+        agentSlug: "funnelsmith",
+        briefText:
+          "Launching a $97 course on calm productivity. Target: burned-out PMs. Tone: warm + direct.",
+        serviceName: "Hook-Story-Offer teardown",
+        servicePriceCents: 7900,
+        idempotencyKey: `run-${userId}`,
+      },
+    });
+    expect(create.status()).toBe(200);
+    const run = await create.json();
+    expect(run.status).toBe("delivered");
+
+    // Pull the JSON backlog for the run; look for the destination events
+    // emitted between agent_returned and delivered.
+    const events = await request.get(
+      `/api/v1/runs/${run.id}/events?backlog=only`,
+    );
+    expect(events.status()).toBe(200);
+    const json = await events.json();
+    const kinds = json.events.map((e: { kind: string }) => e.kind);
+    expect(kinds).toContain("destination_dispatched");
+    expect(kinds).toContain("destination_delivered");
+    const slackEvt = json.events.find(
+      (e: { kind: string; payload: Record<string, unknown> }) =>
+        e.kind === "destination_dispatched" &&
+        (e.payload?.tool as string) === "slack",
+    );
+    expect(slackEvt).toBeTruthy();
+    const slackTarget = slackEvt.payload.target as Record<string, string>;
+    expect(slackTarget.channel).toBe("#aiaas-alpha");
+  });
 });
