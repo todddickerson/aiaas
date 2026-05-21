@@ -53,8 +53,28 @@ export interface CreateRunInput {
 
 // In-memory fallback so the orchestrator works in tests + local dev without
 // Supabase. Real durable state lives in Postgres.
-const memRuns = new Map<string, RunRecord>();
-const memIdempotency = new Map<string, string>(); // idempotency key → run id
+//
+// Stored on globalThis because Next.js sometimes bundles server-component
+// modules and route-handler modules into separate JS instances — without a
+// shared global, an API POST that writes to one Map can't be read by a
+// server-component page that holds its own copy of the Map.
+type RunStores = {
+  memRuns: Map<string, RunRecord>;
+  memIdempotency: Map<string, string>;
+};
+const RUN_STORE_KEY = "__aiaas_run_stores__";
+interface RunStoresHolder {
+  [RUN_STORE_KEY]?: RunStores;
+}
+const runHolder = globalThis as unknown as RunStoresHolder;
+const runStores: RunStores =
+  runHolder[RUN_STORE_KEY] ??
+  (runHolder[RUN_STORE_KEY] = {
+    memRuns: new Map(),
+    memIdempotency: new Map(),
+  });
+const memRuns = runStores.memRuns;
+const memIdempotency = runStores.memIdempotency;
 
 function newId(): string {
   return "run_" + Math.random().toString(16).slice(2, 14);

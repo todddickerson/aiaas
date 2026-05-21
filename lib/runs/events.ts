@@ -39,8 +39,27 @@ interface AppendInput {
 
 // In-memory fallback for tests + when Supabase isn't configured. Pub/sub
 // pattern so SSE handlers can subscribe and get push-style updates.
-const memEvents = new Map<string, RunEvent[]>();
-const subscribers = new Map<string, Set<(event: RunEvent) => void>>();
+//
+// On globalThis for the same reason as the run stores in service.ts: the
+// `/runs/[id]` server-component replay page and the `/api/v1/runs/.../events`
+// route may otherwise bundle to separate module instances.
+type EventStores = {
+  memEvents: Map<string, RunEvent[]>;
+  subscribers: Map<string, Set<(event: RunEvent) => void>>;
+};
+const EVENT_STORE_KEY = "__aiaas_event_stores__";
+interface EventStoresHolder {
+  [EVENT_STORE_KEY]?: EventStores;
+}
+const eventHolder = globalThis as unknown as EventStoresHolder;
+const eventStores: EventStores =
+  eventHolder[EVENT_STORE_KEY] ??
+  (eventHolder[EVENT_STORE_KEY] = {
+    memEvents: new Map(),
+    subscribers: new Map(),
+  });
+const memEvents = eventStores.memEvents;
+const subscribers = eventStores.subscribers;
 
 function newEventId(): string {
   return "evt_" + Math.random().toString(16).slice(2, 14);

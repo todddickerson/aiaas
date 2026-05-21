@@ -107,6 +107,84 @@ test.describe("live trace SSE", () => {
     expect(resp.status()).toBe(400);
   });
 
+  test("POST event → backlog round-trip p95 latency < 500ms (20 samples)", async ({
+    request,
+  }) => {
+    const userId = `e2e-latency-${Date.now()}`;
+    await request.post("/api/v1/wallet/top-up", {
+      data: { userId, amountCents: 20000, idempotencyKey: `topup-${userId}` },
+    });
+    const create = await request.post("/api/v1/runs/create", {
+      data: {
+        userId,
+        agentSlug: "funnelsmith",
+        briefText:
+          "Launching a complete-looking funnel for burned-out PMs. Tone: warm + direct.",
+        serviceName: "Hook-Story-Offer teardown",
+        servicePriceCents: 7900,
+        idempotencyKey: `run-${userId}`,
+      },
+    });
+    const run = await create.json();
+    const samples = 20;
+    const latencies: number[] = [];
+    for (let i = 0; i < samples; i++) {
+      const tag = `latency-${i}-${Math.random().toString(16).slice(2)}`;
+      const t0 = Date.now();
+      await request.post(`/api/v1/runs/${run.id}/events`, {
+        data: { kind: "agent_log", payload: { label: tag } },
+      });
+      const back = await request.get(
+        `/api/v1/runs/${run.id}/events?backlog=only`,
+      );
+      const body = await back.json();
+      const found = (body.events as Array<{ payload: { label?: string } }>).some(
+        (e) => e.payload?.label === tag,
+      );
+      const latency = Date.now() - t0;
+      if (!found) throw new Error(`backlog missed our injected event ${tag}`);
+      latencies.push(latency);
+    }
+    latencies.sort((a, b) => a - b);
+    const p95Index = Math.floor(latencies.length * 0.95);
+    const p95 = latencies[p95Index] ?? latencies[latencies.length - 1];
+    // Budget per Day 7 row: p95 < 500ms for the POST→backlog round-trip.
+    expect(p95).toBeLessThan(500);
+  });
+
+  test("replay page renders the trace for a terminal run", async ({
+    page,
+    request,
+  }) => {
+    const userId = `e2e-replay-${Date.now()}`;
+    await request.post("/api/v1/wallet/top-up", {
+      data: { userId, amountCents: 20000, idempotencyKey: `topup-${userId}` },
+    });
+    const create = await request.post("/api/v1/runs/create", {
+      data: {
+        userId,
+        agentSlug: "funnelsmith",
+        briefText:
+          "Launching a complete-looking funnel for burned-out PMs. Tone: warm + direct.",
+        serviceName: "Hook-Story-Offer teardown",
+        servicePriceCents: 7900,
+        idempotencyKey: `run-${userId}`,
+      },
+    });
+    const run = await create.json();
+    await request.post(`/api/v1/runs/${run.id}/accept`, {
+      data: { idempotencyKey: `accept-${run.id}` },
+    });
+
+    await page.goto(`/runs/${run.id}`);
+    await expect(page.getByTestId("run-replay")).toBeVisible();
+    await expect(page.getByTestId("run-replay-status")).toContainText(
+      "accepted",
+    );
+    await expect(page.getByTestId("run-replay-terminal-note")).toBeVisible();
+    await expect(page.getByTestId("live-trace")).toBeVisible();
+  });
+
   test("LiveTrace renders in the hire-flow modal after a passing brief", async ({
     page,
   }) => {
