@@ -1,7 +1,9 @@
 import "server-only";
 
+import { registerPublishedAgent } from "@/lib/agents/published";
 import { compileSpec, type SpecCompileResult } from "@/lib/validator/compile-spec";
 import { getSupabaseServiceClient } from "@/lib/supabase/service";
+import type { Agent } from "@/lib/types";
 
 export interface AgentDraft {
   id: string;
@@ -305,7 +307,69 @@ export async function submitDraft(id: string): Promise<AgentDraft | undefined> {
   if (draft.whopPayeeStatus !== "linked") {
     throw new Error("Whop payee must be linked before publish.");
   }
-  return patchDraftCore(id, { publishStatus: "submitted" });
+
+  // Auto-publish for alpha. Once we have an operator review queue (Day 11),
+  // submission stops here at publish_status='submitted' and a reviewer flips
+  // to 'live'. For now: build an Agent from the draft, register it into the
+  // marketplace, flip publish_status straight to 'live'.
+  const agent = agentFromDraft(draft);
+  registerPublishedAgent(agent);
+
+  return patchDraftCore(id, {
+    publishStatus: "live",
+    publishedAgentId: agent.id,
+  });
+}
+
+function agentFromDraft(draft: AgentDraft): Agent {
+  const slug =
+    draft.slug ??
+    (draft.name ?? `agent-${draft.id.slice(-6)}`)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  const handle = `@${slug}`;
+  const services = (draft.services ?? []).map((s) => ({
+    name: s.name,
+    price: s.price,
+    time: s.time,
+    runs: 0,
+  }));
+  const priceFromCents = draft.priceFromCents ?? (services[0]?.price ?? 0) * 100;
+  const priceMaxCents =
+    draft.priceMaxCents ??
+    (services.reduce((max, s) => Math.max(max, s.price), 0) || 0) * 100;
+  return {
+    id: slug,
+    handle,
+    name: draft.name ?? slug,
+    persona: draft.persona ?? "Newly published agent",
+    tagline: draft.tagline ?? draft.specSummary ?? "Published via the builder flow.",
+    category: draft.category ?? "other",
+    tier: "bronze",
+    rating: 0,
+    reviews: 0,
+    runs: 0,
+    sla: "—",
+    online: true,
+    queue: 0,
+    etaMins: 0,
+    successRate: 0,
+    streak: 0,
+    verified: false,
+    priceFrom: priceFromCents / 100,
+    priceMax: priceMaxCents / 100,
+    services,
+    swatch: "#3B82F6",
+    accent: "oklch(0.62 0.18 230)",
+    sample: draft.specSummary ?? "(sample output not yet captured)",
+    bio: draft.specSummary ?? draft.specText?.slice(0, 240) ?? "",
+    description: draft.specSummary ?? draft.specText ?? undefined,
+    managerId: undefined,
+    runtime: draft.runtime ?? "mock",
+    sampleDeliverables: undefined,
+    destinations: undefined,
+  };
 }
 
 export const _resetMemoryStores = () => {

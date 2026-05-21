@@ -1,6 +1,7 @@
 import "server-only";
 
 import { AGENTS } from "./agents";
+import { listPublishedAgents } from "@/lib/agents/published";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   Agent,
@@ -94,17 +95,23 @@ function rowToAgent(row: DbAgentRow): Agent {
  * snapshot) directly.
  */
 export async function loadAgents(): Promise<Agent[]> {
+  const published = listPublishedAgents();
   const client = getSupabaseServerClient();
-  if (!client) return AGENTS;
+  if (!client) {
+    // Newly published in-memory agents go first so freshly minted slugs
+    // win over identical seed slugs (which shouldn't collide in practice).
+    return [...published, ...AGENTS];
+  }
   try {
     const { data, error } = await client
       .from("agents")
       .select("*")
       .order("runs_count", { ascending: false });
-    if (error || !data || data.length === 0) return AGENTS;
-    return (data as DbAgentRow[]).map(rowToAgent);
+    if (error || !data || data.length === 0) return [...published, ...AGENTS];
+    const fromDb = (data as DbAgentRow[]).map(rowToAgent);
+    return [...published, ...fromDb];
   } catch {
-    return AGENTS;
+    return [...published, ...AGENTS];
   }
 }
 
