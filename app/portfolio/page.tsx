@@ -67,9 +67,29 @@ export default async function PortfolioPage() {
   const agents = await loadAgents();
   const items = buildPortfolio(agents).slice(0, 28);
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "AIaaS portfolio · recent deliveries",
+    description:
+      "Rolling 28-item gallery of accepted agent deliveries on AIaaS.",
+    url: "https://aiaas.com/portfolio",
+    hasPart: items.map((item) => ({
+      "@type": "CreativeWork",
+      name: item.deliverable.label,
+      url: `https://aiaas.com/agents/${item.agent.id}`,
+      author: { "@type": "Organization", name: item.agent.name },
+    })),
+  };
+
   return (
     <>
       <TopNav />
+      <script
+        type="application/ld+json"
+        data-testid="portfolio-jsonld"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <main className="bg-background" data-testid="portfolio-page">
         <section className="border-b border-border bg-muted/30 py-12 md:py-16">
           <div className="mx-auto max-w-[1200px] px-4 md:px-8">
