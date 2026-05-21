@@ -1,7 +1,7 @@
 import "server-only";
 
 import { AGENTS } from "./agents";
-import { listPublishedAgents } from "@/lib/agents/published";
+import { getPublishedAgent } from "@/lib/agents/published";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   Agent,
@@ -95,28 +95,31 @@ function rowToAgent(row: DbAgentRow): Agent {
  * snapshot) directly.
  */
 export async function loadAgents(): Promise<Agent[]> {
-  const published = listPublishedAgents();
+  // Newly published agents (Day 8) are reachable by direct URL via
+  // `loadAgent()` but intentionally NOT merged into the marketplace grid
+  // here: that would pollute homepage snapshots / sort orders with random
+  // slugs created during E2E. The real listing surface (search index +
+  // curated grid) lives downstream of operator review.
   const client = getSupabaseServerClient();
-  if (!client) {
-    // Newly published in-memory agents go first so freshly minted slugs
-    // win over identical seed slugs (which shouldn't collide in practice).
-    return [...published, ...AGENTS];
-  }
+  if (!client) return AGENTS;
   try {
     const { data, error } = await client
       .from("agents")
       .select("*")
       .order("runs_count", { ascending: false });
-    if (error || !data || data.length === 0) return [...published, ...AGENTS];
-    const fromDb = (data as DbAgentRow[]).map(rowToAgent);
-    return [...published, ...fromDb];
+    if (error || !data || data.length === 0) return AGENTS;
+    return (data as DbAgentRow[]).map(rowToAgent);
   } catch {
-    return [...published, ...AGENTS];
+    return AGENTS;
   }
 }
 
 export async function loadAgent(slug: string): Promise<Agent | undefined> {
   const needle = slug.startsWith("@") ? slug.slice(1) : slug;
+  // Newly published agents win — `loadAgent` is what /agents/[slug] and the
+  // run orchestrator both call.
+  const published = getPublishedAgent(needle);
+  if (published) return published;
   const agents = await loadAgents();
   return agents.find(
     (a) => a.id === needle || a.handle.slice(1) === needle || a.handle === slug,
