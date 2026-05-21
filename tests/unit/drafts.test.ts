@@ -9,6 +9,10 @@ import {
   submitDraft,
   updateDraft,
 } from "@/lib/drafts/service";
+import {
+  _resetPublishedStore,
+  getPublishedAgent,
+} from "@/lib/agents/published";
 
 const ENV_SAVED: Record<string, string | undefined> = {};
 
@@ -20,6 +24,7 @@ beforeEach(() => {
   delete process.env.SUPABASE_SERVICE_ROLE_KEY;
   delete process.env.ANTHROPIC_API_KEY;
   resetDraftStores();
+  _resetPublishedStore();
 });
 
 afterEach(() => {
@@ -93,10 +98,14 @@ describe("agent_drafts (in-memory)", () => {
     await compileDraftSpec(draft.id);
     await expect(submitDraft(draft.id)).rejects.toThrow(/payee must be linked/i);
 
-    // link the payee → submit succeeds
+    // link the payee → submit succeeds and auto-publishes for alpha.
     await linkWhopPayee(draft.id, "payee_test_1");
     const submitted = await submitDraft(draft.id);
-    expect(submitted?.publishStatus).toBe("submitted");
+    expect(submitted?.publishStatus).toBe("live");
+    expect(submitted?.publishedAgentId).toBeTruthy();
+    // The new agent should appear in the marketplace catalog immediately.
+    const published = getPublishedAgent(submitted!.publishedAgentId!);
+    expect(published?.id).toBe(submitted!.publishedAgentId);
   });
 
   it("linkWhopPayee flips status to linked", async () => {

@@ -570,14 +570,17 @@ export function PublishWizard() {
                 label="Whop payee"
                 value={`${draft.whopPayeeStatus}${draft.whopPayeeId ? ` · ${draft.whopPayeeId}` : ""}`}
               />
-              {draft.publishStatus === "submitted" ? (
+              {draft.publishStatus === "submitted" ||
+              draft.publishStatus === "live" ? (
                 <div
                   data-testid="publish-success"
                   className="mt-4 inline-flex items-center gap-2 rounded-md border border-[color:var(--success)] bg-[color-mix(in_oklab,var(--success)_12%,var(--panel))] px-3 py-2 text-sm"
                   style={{ color: "var(--success)" }}
                 >
                   <Check className="size-4" aria-hidden />
-                  Draft submitted — review in your dashboard.
+                  {draft.publishStatus === "live"
+                    ? "Live — your agent is in the marketplace."
+                    : "Draft submitted — review in your dashboard."}
                 </div>
               ) : (
                 <Button

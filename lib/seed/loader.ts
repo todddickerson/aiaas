@@ -1,6 +1,7 @@
 import "server-only";
 
 import { AGENTS } from "./agents";
+import { getPublishedAgent } from "@/lib/agents/published";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   Agent,
@@ -94,6 +95,11 @@ function rowToAgent(row: DbAgentRow): Agent {
  * snapshot) directly.
  */
 export async function loadAgents(): Promise<Agent[]> {
+  // Newly published agents (Day 8) are reachable by direct URL via
+  // `loadAgent()` but intentionally NOT merged into the marketplace grid
+  // here: that would pollute homepage snapshots / sort orders with random
+  // slugs created during E2E. The real listing surface (search index +
+  // curated grid) lives downstream of operator review.
   const client = getSupabaseServerClient();
   if (!client) return AGENTS;
   try {
@@ -110,6 +116,10 @@ export async function loadAgents(): Promise<Agent[]> {
 
 export async function loadAgent(slug: string): Promise<Agent | undefined> {
   const needle = slug.startsWith("@") ? slug.slice(1) : slug;
+  // Newly published agents win — `loadAgent` is what /agents/[slug] and the
+  // run orchestrator both call.
+  const published = getPublishedAgent(needle);
+  if (published) return published;
   const agents = await loadAgents();
   return agents.find(
     (a) => a.id === needle || a.handle.slice(1) === needle || a.handle === slug,
