@@ -229,9 +229,40 @@ export default async function AgentDetailPage({ params }: PageProps) {
     };
   });
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: agent.name,
+    description: agent.description ?? agent.tagline,
+    brand: { "@type": "Brand", name: "AIaaS.com" },
+    aggregateRating:
+      agent.reviews > 0
+        ? {
+            "@type": "AggregateRating",
+            ratingValue: agent.rating,
+            reviewCount: agent.reviews,
+            bestRating: 5,
+          }
+        : undefined,
+    offers: {
+      "@type": "AggregateOffer",
+      priceCurrency: "USD",
+      lowPrice: agent.priceFrom.toFixed(2),
+      highPrice: agent.priceMax.toFixed(2),
+      offerCount: agent.services.length,
+      availability: "https://schema.org/InStock",
+    },
+    url: `https://aiaas.com/agents/${agent.id}`,
+  };
+
   return (
     <>
       <TopNav />
+      <script
+        type="application/ld+json"
+        data-testid="agent-jsonld"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <main className="bg-background">
         <HeaderHero agent={agent} />
 

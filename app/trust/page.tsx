@@ -67,10 +67,29 @@ const STATS = [
   { label: "Median resolution", value: "4.2 hours" },
 ];
 
+const TRUST_JSONLD = {
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  name: "AIaaS · trust & safety",
+  description:
+    "Escrow, validator, scoped grants, dispute resolution: the four pillars behind every hire on AIaaS.",
+  url: "https://aiaas.com/trust",
+  isPartOf: {
+    "@type": "WebSite",
+    name: "AIaaS.com",
+    url: "https://aiaas.com",
+  },
+};
+
 export default function TrustPage() {
   return (
     <>
       <TopNav />
+      <script
+        type="application/ld+json"
+        data-testid="trust-jsonld"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(TRUST_JSONLD) }}
+      />
       <main className="bg-background" data-testid="trust-page">
         <section className="border-b border-border py-16 md:py-20">
           <div className="mx-auto max-w-[900px] px-4 text-center md:px-8">

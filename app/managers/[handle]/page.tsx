@@ -55,9 +55,33 @@ export default async function ManagerProfilePage({ params }: PageProps) {
   const allAgents = await loadAgents();
   const managed = allAgents.filter((a) => mgr.managedIds.includes(a.id));
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name: mgr.name,
+    alternateName: mgr.handle,
+    description: mgr.bio,
+    url: `https://aiaas.com/managers/${mgr.handle.replace(/^@/, "")}`,
+    jobTitle: mgr.title,
+    knowsAbout: mgr.vertical,
+    makesOffer: managed.map((a) => ({
+      "@type": "Offer",
+      itemOffered: {
+        "@type": "Service",
+        name: a.name,
+        url: `https://aiaas.com/agents/${a.id}`,
+      },
+    })),
+  };
+
   return (
     <>
       <TopNav />
+      <script
+        type="application/ld+json"
+        data-testid="manager-jsonld"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <main className="bg-background" data-testid="manager-profile">
         {/* Cover */}
         <section
