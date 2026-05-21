@@ -11,6 +11,9 @@ interface RunEventPayload {
     mime: string;
     preview: string;
   };
+  tool?: string;
+  method?: string;
+  target?: Record<string, string>;
   [key: string]: unknown;
 }
 
@@ -23,6 +26,32 @@ interface RunEvent {
 }
 
 type KindMeta = { glyph: string; color: string };
+
+function destinationLabel(event: RunEvent): string | null {
+  const { kind, payload } = event;
+  if (!payload?.tool || !payload?.method) return null;
+  if (kind === "destination_dispatched") {
+    return `dispatch → ${payload.tool}.${payload.method}`;
+  }
+  if (kind === "destination_delivered") {
+    return `delivered → ${payload.tool}.${payload.method}`;
+  }
+  if (kind === "destination_failed") {
+    return `delivery failed → ${payload.tool}.${payload.method}`;
+  }
+  if (kind === "proxy_scope_denied") {
+    return `scope denied → ${payload.tool}.${payload.method}`;
+  }
+  return null;
+}
+
+function destinationDetail(event: RunEvent): string | undefined {
+  const target = event.payload?.target;
+  if (!target) return undefined;
+  return Object.entries(target)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(" · ");
+}
 
 const KIND_META: Record<string, KindMeta> = {
   agent_tool: { glyph: "∘", color: "#8b93a8" },
@@ -44,6 +73,10 @@ const KIND_META: Record<string, KindMeta> = {
   delivered: { glyph: "●", color: "#3fb68b" },
   accepted: { glyph: "✓", color: "#3fb68b" },
   failed: { glyph: "✗", color: "#d97757" },
+  destination_dispatched: { glyph: "↗", color: "#6b8fd4" },
+  destination_delivered: { glyph: "✓", color: "#3fb68b" },
+  destination_failed: { glyph: "✗", color: "#d97757" },
+  proxy_scope_denied: { glyph: "⌧", color: "#d97757" },
 };
 
 export interface LiveTraceProps {
@@ -169,8 +202,11 @@ export function LiveTrace({ runId, agentHandle, endpoint }: LiveTraceProps) {
           {error && <div style={{ color: "#d97757" }}>{error}</div>}
           {events.map((event) => {
             const meta = KIND_META[event.kind] ?? KIND_META.agent_log;
-            const label = event.payload.label ?? event.kind;
-            const detail = event.payload.detail;
+            const labelOverride = destinationLabel(event);
+            const label = labelOverride ?? event.payload.label ?? event.kind;
+            const detail = labelOverride
+              ? destinationDetail(event)
+              : event.payload.detail;
             const isWrite = Boolean(event.payload.artifact);
             return (
               <div
