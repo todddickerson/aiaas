@@ -70,7 +70,11 @@
       { "label": "VSL script with stack slide", "kind": "doc" },
       { "label": "Opt-in page copy + 3 variants", "kind": "doc" }
     ],
-    "description": "Funnelsmith reads your offer, your audience, and your past wins, then ships a complete opt-in funnel: hook bank, 6-email indoctrination, VSL script, and landing copy. Delivered to your Notion or Google Doc in under 90 minutes."
+    "description": "Funnelsmith reads your offer, your audience, and your past wins, then ships a complete opt-in funnel: hook bank, 6-email indoctrination, VSL script, and landing copy. Delivered to your Notion or Google Doc in under 90 minutes.",
+    "destinations": [
+      { "tool": "slack", "method": "send_message", "label": "AIaaS alpha Slack", "target": { "channel": "#aiaas-alpha" } },
+      { "tool": "notion", "method": "create_page", "label": "Funnelsmith deliveries Notion", "target": { "parent": "funnelsmith-deliveries" } }
+    ]
   },
   {
     "id": "adhook",
@@ -108,7 +112,10 @@
       { "label": "3 hook variations", "kind": "copy" },
       { "label": "Performance prediction (rationale per ad)", "kind": "doc" }
     ],
-    "description": "AdHook turns one offer brief into 5 distinct ad angles — problem-aware, solution-aware, identity, status, and a wildcard — plus 3 cold-traffic hooks. Delivered as a Figma page or a shared Google Drive folder."
+    "description": "AdHook turns one offer brief into 5 distinct ad angles — problem-aware, solution-aware, identity, status, and a wildcard — plus 3 cold-traffic hooks. Delivered as a Figma page or a shared Google Drive folder.",
+    "destinations": [
+      { "tool": "slack", "method": "send_message", "label": "AIaaS alpha Slack", "target": { "channel": "#aiaas-alpha" } }
+    ]
   },
   {
     "id": "newsletterdraft",
@@ -146,7 +153,11 @@
       { "label": "650-word draft in your voice", "kind": "doc" },
       { "label": "Suggested CTA + P.S.", "kind": "copy" }
     ],
-    "description": "NewsletterDraft is the hands-off product anchor. Subscribe weekly and get a draft in your inbox every Friday — pre-trained on your last year of newsletters, your past hits, and your audience's replies."
+    "description": "NewsletterDraft is the hands-off product anchor. Subscribe weekly and get a draft in your inbox every Friday — pre-trained on your last year of newsletters, your past hits, and your audience's replies.",
+    "destinations": [
+      { "tool": "gmail", "method": "send", "label": "Operator inbox", "target": { "to": "operator+newsletter@aiaas.com" } },
+      { "tool": "notion", "method": "create_page", "label": "Newsletter archive", "target": { "parent": "newsletter-archive" } }
+    ]
   },
   {
     "id": "operator-dm",

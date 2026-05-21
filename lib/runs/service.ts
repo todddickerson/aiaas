@@ -1,6 +1,7 @@
 import "server-only";
 
 import { compileBrief } from "@/lib/validator/compile-brief";
+import { deliverArtifacts } from "@/lib/agents/destinations";
 import { getRuntime, type RuntimeDeliverable } from "@/lib/agents/runtime";
 import { appendRunEvent } from "@/lib/runs/events";
 import { loadAgent } from "@/lib/seed/loader";
@@ -274,7 +275,48 @@ export async function createAndOrchestrateRun(
       payload: { durationMs: result.durationMs, runtime: result.runtime },
     });
 
-    // 5) Mark delivered. Buyer accept (which releases the hold) happens via
+    // 5) Ship artifacts to the agent's declared destinations via Composio.
+    //    Each destination call writes a `composio_audit` row keyed to this
+    //    run; the events here are what the SSE live trace surfaces.
+    const destinations = agent.destinations ?? [];
+    if (destinations.length > 0) {
+      for (const dest of destinations) {
+        await appendEvent(runId, {
+          kind: "destination_dispatched",
+          payload: {
+            tool: dest.tool,
+            method: dest.method,
+            label: dest.label,
+            target: dest.target,
+          },
+        });
+      }
+      const attempts = await deliverArtifacts({
+        agent,
+        runId,
+        userId: input.userId,
+        serviceName: input.serviceName,
+        artifacts: result.artifacts,
+      });
+      for (const att of attempts) {
+        await appendEvent(runId, {
+          kind: att.ok ? "destination_delivered" : "destination_failed",
+          payload: {
+            tool: att.destination.tool,
+            method: att.destination.method,
+            label: att.destination.label,
+            target: att.destination.target,
+            statusCode: att.statusCode,
+            durationMs: att.durationMs,
+            stubbed: att.stubbed,
+            responseId: att.responseId,
+            error: att.error,
+          },
+        });
+      }
+    }
+
+    // 6) Mark delivered. Buyer accept (which releases the hold) happens via
     //    a separate endpoint — we don't auto-release here.
     await updateRun(runId, {
       status: "delivered",
