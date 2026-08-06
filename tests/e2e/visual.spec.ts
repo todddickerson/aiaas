@@ -48,3 +48,47 @@ for (const { name, mode, accent } of MATRIX) {
     });
   });
 }
+
+// Additional public pages covered by the same harness as the homepage: same
+// theme-via-localStorage seeding, same freeze CSS, same networkidle wait, and
+// the same data-mode/data-accent guard against silent baseline drift. Each
+// renders entirely from static seed data (lib/seed/*) with no live timestamps,
+// randomness, or animated marquees, so full-page snapshots are deterministic
+// and need no masking. `ready` is the page's root landmark testid we wait on
+// before snapshotting.
+const PAGES: ReadonlyArray<{ slug: string; path: string; ready: string }> = [
+  { slug: "portfolio", path: "/portfolio", ready: "portfolio-page" },
+  { slug: "trust", path: "/trust", ready: "trust-page" },
+  { slug: "agent-funnelsmith", path: "/agents/funnelsmith", ready: "agent-hero" },
+  { slug: "manager-todd", path: "/managers/todd", ready: "manager-profile" },
+];
+
+for (const { slug, path, ready } of PAGES) {
+  for (const { name, mode, accent } of MATRIX) {
+    test(`${slug} @ ${name}`, async ({ page }) => {
+      await page.addInitScript(
+        ({ mode, accent }) => {
+          window.localStorage.setItem(
+            "aiaas:theme",
+            JSON.stringify({ mode, accent, variant: "editorial" }),
+          );
+        },
+        { mode, accent },
+      );
+      await page.goto(path);
+      await page.addStyleTag({ content: FREEZE_CSS });
+      await page.waitForLoadState("networkidle");
+
+      // wait for the page's root landmark before snapshotting
+      await expect(page.getByTestId(ready)).toBeVisible();
+
+      // assert the theme actually applied — guards against silent baseline drift
+      await expect(page.locator("html")).toHaveAttribute("data-mode", mode);
+      await expect(page.locator("html")).toHaveAttribute("data-accent", accent);
+
+      await expect(page).toHaveScreenshot(`${slug}-${name}.png`, {
+        fullPage: true,
+      });
+    });
+  }
+}
