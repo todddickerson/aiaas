@@ -1,0 +1,155 @@
+name: Lighthouse weekly
+
+# BUILD-PLAN §"Drift detection in production": weekly automated Lighthouse
+# run on every public page of the live alpha; FAIL if any category score
+# drops >10% week-over-week (WARN under the Day-11 "≥90" floor).
+#
+# Baseline = the `lighthouse-baseline` artifact from the previous successful
+# run of this workflow (downloaded via the API, so no baseline lives in git
+# and no commit is needed each week). First run seeds it.
+#
+# Alerting mirrors the synthetic monitor: a single `lighthouse-regression`
+# labelled issue is opened / commented on regression and closed on recovery.
+
+on:
+  schedule:
+    - cron: "0 13 * * 1" # Mondays 13:00 UTC (09:00 ET)
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Base URL to audit (defaults to the alpha deployment)"
+        required: false
+        type: string
+      reset_baseline:
+        description: "Ignore the previous baseline and re-seed"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: lighthouse-weekly
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+env:
+  LIGHTHOUSE_BASE_URL: ${{ inputs.base_url || vars.MONITOR_BASE_URL || 'https://aiaas-todddickerson.vercel.app' }}
+  LIGHTHOUSE_OUT_DIR: lighthouse-out
+  # Optional repo secret: lets the audit see the real pages once the alpha
+  # gate is enabled. Absent = audits whatever the public sees.
+  LIGHTHOUSE_ALPHA_TOKEN: ${{ secrets.AIAAS_ALPHA_TOKEN }}
+  ISSUE_LABEL: lighthouse-regression
+  ISSUE_TITLE: "📉 Lighthouse weekly: score regression"
+
+jobs:
+  audit:
+    name: audit · compare · alert
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            lib/monitor
+            scripts
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Restore last week's baseline
+        if: inputs.reset_baseline != true
+        id: restore
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/lighthouse-weekly.yml/runs?status=success&per_page=1" \
+            --jq '.workflow_runs[0].id // empty')
+          if [ -z "$run_id" ]; then
+            echo "No previous successful run — seeding baseline this week."
+            exit 0
+          fi
+          mkdir -p previous
+          if gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name lighthouse-baseline --dir previous; then
+            echo "path=previous/baseline.json" >> "$GITHUB_OUTPUT"
+            echo "Restored baseline from run $run_id"
+          else
+            echo "Previous run $run_id had no baseline artifact — seeding."
+          fi
+
+      - name: Run Lighthouse
+        id: audit
+        env:
+          LIGHTHOUSE_BASELINE: ${{ steps.restore.outputs.path }}
+        # Zero app dependencies: `npx lighthouse@12` is fetched on demand and
+        # ubuntu-latest ships Google Chrome. Type stripping runs the .ts core.
+        run: node --experimental-strip-types scripts/lighthouse-weekly.mjs "$LIGHTHOUSE_BASE_URL"
+        continue-on-error: true
+
+      - name: Upload baseline for next week
+        if: always() && hashFiles('lighthouse-out/baseline.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-baseline
+          path: lighthouse-out/baseline.json
+          retention-days: 90
+
+      - name: Upload full reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: lighthouse-out
+          retention-days: 30
+
+      - name: Find open tracking issue
+        id: issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          number=$(gh issue list --repo "$GITHUB_REPOSITORY" --label "$ISSUE_LABEL" --state open --limit 1 --json number --jq '.[0].number // empty')
+          echo "number=${number}" >> "$GITHUB_OUTPUT"
+
+      - name: Alert on regression
+        if: steps.audit.outputs.ok != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create "$ISSUE_LABEL" --repo "$GITHUB_REPOSITORY" --color D93F0B \
+            --description "Opened automatically by the weekly Lighthouse gate" 2>/dev/null || true
+
+          {
+            cat "${{ steps.audit.outputs.report }}" 2>/dev/null || echo "Audit step did not produce a report — see run log."
+            echo
+            echo "Run: $RUN_URL"
+          } > /tmp/body.md
+
+          if [ -n "${{ steps.issue.outputs.number }}" ]; then
+            gh issue comment "${{ steps.issue.outputs.number }}" --repo "$GITHUB_REPOSITORY" --body-file /tmp/body.md
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$ISSUE_TITLE" --label "$ISSUE_LABEL" --body-file /tmp/body.md
+          fi
+
+      - name: Close tracking issue on recovery
+        if: steps.audit.outputs.ok == 'true' && steps.issue.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue close "${{ steps.issue.outputs.number }}" --repo "$GITHUB_REPOSITORY" \
+            --comment "✅ Recovered — all pages back within budget. Run: $RUN_URL"
+
+      - name: Fail job if scores regressed
+        if: steps.audit.outputs.ok != 'true'
+        run: |
+          echo "::error::Lighthouse weekly detected a >10% week-over-week regression"
+          exit 1
