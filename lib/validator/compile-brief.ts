@@ -22,7 +22,7 @@ interface CompileOptions {
   serviceMaxRetries?: number;
 }
 
-const HAIKU_MODEL = "claude-haiku-4-5-20251001";
+const HAIKU_MODEL = "claude-haiku-5-5";
 const OPUS_MODEL = "claude-opus-4-7";
 
 function buildSystemPrompt(agent: Agent): string {
@@ -159,6 +159,9 @@ export async function compileBrief({
     const resp = await client.messages.create({
       model,
       max_tokens: 256,
+      // Haiku 5.5 thinks by default and thinking counts toward max_tokens, so
+      // the 256 cap can truncate the verdict JSON. Opus path is unchanged.
+      ...(model === HAIKU_MODEL ? { thinking: { type: "disabled" as const } } : {}),
       system,
       messages: [{ role: "user", content: user }],
     });

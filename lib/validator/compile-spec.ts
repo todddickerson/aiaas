@@ -23,7 +23,7 @@ interface CompileOptions {
   specText: string;
 }
 
-const HAIKU_MODEL = "claude-haiku-4-5-20251001";
+const HAIKU_MODEL = "claude-haiku-5-5";
 
 function buildSystemPrompt(): string {
   return [
@@ -158,6 +158,9 @@ export async function compileSpec(
   const resp = await client.messages.create({
     model: HAIKU_MODEL,
     max_tokens: 512,
+    // Haiku 5.5 thinks by default and thinking counts toward max_tokens —
+    // disable it so the spec JSON is not truncated at the 512 cap.
+    thinking: { type: "disabled" },
     system,
     messages: [{ role: "user", content: user }],
   });
